@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full w-full overflow-hidden select-none">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Simulasi Topologi & Perangkat Jaringan 3D Interaktif PID - SMKN 1 Maja</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- FontAwesome Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Three.js & OrbitControls CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  
+  <!-- Canvas Confetti CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pidCyan: '#06b6d4',
+            pidBlue: '#0284c7',
+            pidDark: '#0b0f19',
+            pidCard: 'rgba(15, 23, 42, 0.85)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Styling Dasar & PID Optimized Touch Target */
+    body {
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      touch-action: manipulation;
+    }
+    
+    .touch-btn {
+      min-width: 54px;
+      min-height: 54px;
+    }
+
+    /* Custom Scrollbar for Drawer/Terminal */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(6, 182, 212, 0.5);
+      border-radius: 3px;
+    }
+    
+    /* Hotspot Pulsing Effect */
+    @keyframes pulseGlow {
+      0% { transform: scale(1); opacity: 0.9; box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7); }
+      70% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 0 15px rgba(6, 182, 212, 0); }
+      100% { transform: scale(1); opacity: 0.9; box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+    }
+    .hotspot-pulse {
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+
+    /* Glassmorphism Classes */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    /* Themes */
+    body.theme-cyber {
+      background-color: #0b0f19;
+      color: #f8fafc;
+    }
+    body.theme-light {
+      background-color: #f1f5f9;
+      color: #0f172a;
+    }
+    body.theme-light .glass-panel {
+      background: rgba(255, 255, 255, 0.92);
+      border-color: rgba(2, 132, 199, 0.3);
+      color: #0f172a;
+    }
+    body.theme-light .text-slate-300 { color: #334155; }
+    body.theme-light .text-slate-400 { color: #475569; }
+
+    body.theme-lab {
+      background-color: #0b192c;
+      color: #e2e8f0;
+    }
+    body.theme-lab .glass-panel {
+      background: rgba(10, 25, 47, 0.88);
+      border-color: rgba(30, 144, 255, 0.4);
+    }
+  </style>
+</head>
+<body class="theme-cyber h-full w-full overflow-hidden select-none relative">
+
+  <!-- Three.js Canvas Container -->
+  <div id="canvas-container" class="w-full h-full absolute inset-0 z-0"></div>
+
+  <!-- 3D Hotspots Projection Container -->
+  <div id="hotspot-container" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+  <!-- Header Bar / Main Navigation -->
+  <header class="absolute top-0 left-0 right-0 z-20 p-4 flex flex-wrap justify-between items-center gap-3 pointer-events-none">
+    <div class="glass-panel rounded-2xl px-5 py-3 flex items-center gap-4 pointer-events-auto shadow-2xl">
+      <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-cyan-500/30">
+        <i class="fa-solid fa-network-wired"></i>
+      </div>
+      <div>
+        <h1 class="font-extrabold text-lg md:text-xl tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500">
+          Simulasi Topologi Jaringan 3D PID
+        </h1>
+        <p class="text-xs text-slate-400 font-medium">SMKN 1 Maja • Teknik Komputer & Jaringan (TJKT)</p>
+      </div>
+    </div>
+
+    <!-- Quick Action Bar for PID Touchscreen -->
+    <div class="glass-panel rounded-2xl p-2 flex items-center gap-2 pointer-events-auto shadow-2xl overflow-x-auto">
+      <button onclick="resetCamera()" class="touch-btn bg-slate-800/80 hover:bg-cyan-600 text-cyan-400 hover:text-white rounded-xl p-3 flex flex-col items-center justify-center transition border border-cyan-500/30" title="Reset Pandangan Kamera">
+        <i class="fa-solid fa-arrows-to-eye text-lg"></i>
+        <span class="text-[10px] font-bold mt-1">Reset 3D</span>
+      </button>
+
+      <button onclick="toggleCLI()" class="touch-btn bg-slate-800/80 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-xl p-3 flex flex-col items-center justify-center transition border border-emerald-500/30" title="Buka CLI Terminal">
+        <i class="fa-solid fa-terminal text-lg"></i>
+        <span class="text-[10px] font-bold mt-1">CLI Cisco</span>
+      </button>
+
+      <button onclick="openQuiz()" class="touch-btn bg-slate-800/80 hover:bg-purple-600 text-purple-400 hover:text-white rounded-xl p-3 flex flex-col items-center justify-center transition border border-purple-500/30" title="Mulai Kuis Evaluasi">
+        <i class="fa-solid fa-graduation-cap text-lg"></i>
+        <span class="text-[10px] font-bold mt-1">Kuis PID</span>
+      </button>
+
+      <div class="h-8 w-[1px] bg-slate-700/60 my-auto"></div>
+
+      <!-- Theme Switcher -->
+      <button onclick="cycleTheme()" class="touch-btn bg-slate-800/80 hover:bg-amber-600 text-amber-400 hover:text-white rounded-xl p-3 flex flex-col items-center justify-center transition border border-amber-500/30" title="Ganti Tema Visual">
+        <i class="fa-solid fa-palette text-lg"></i>
+        <span class="text-[10px] font-bold mt-1">Tema</span>
+      </button>
+
+      <!-- Fullscreen Button -->
+      <button onclick="toggleFullscreen()" class="touch-btn bg-slate-800/80 hover:bg-blue-600 text-blue-400 hover:text-white rounded-xl p-3 flex flex-col items-center justify-center transition border border-blue-500/30" title="Layar Penuh PID">
+        <i class="fa-solid fa-expand text-lg"></i>
+        <span class="text-[10px] font-bold mt-1">Fullscreen</span>
+      </button>
+
+      <!-- Developer Info Modal Trigger -->
+      <button onclick="openCredits()" class="touch-btn bg-slate-800/80 hover:bg-rose-600 text-rose-400 hover:text-white rounded-xl p-3 flex flex-col items-center justify-center transition border border-rose-500/30" title="Kredit Pengembang">
+        <i class="fa-solid fa-circle-info text-lg"></i>
+        <span class="text-[10px] font-bold mt-1">Kredit</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Bottom Interactive Topology Path Legend -->
+  <div class="absolute bottom-4 left-4 right-4 z-20 pointer-events-none hidden md:flex justify-center">
+    <div class="glass-panel rounded-2xl px-6 py-3 flex items-center gap-3 pointer-events-auto shadow-2xl text-xs font-semibold text-slate-300">
+      <span class="text-cyan-400 flex items-center gap-1.5"><i class="fa-solid fa-globe"></i> Internet</span>
+      <i class="fa-solid fa-chevron-right text-slate-600"></i>
+      <span class="text-emerald-400 flex items-center gap-1.5"><i class="fa-solid fa-box-archive"></i> ONU Modem</span>
+      <i class="fa-solid fa-chevron-right text-slate-600"></i>
+      <span class="text-rose-400 flex items-center gap-1.5"><i class="fa-solid fa-shield-halved"></i> Firewall</span>
+      <i class="fa-solid fa-chevron-right text-slate-600"></i>
+      <span class="text-sky-400 flex items-center gap-1.5"><i class="fa-solid fa-server"></i> Router</span>
+      <i class="fa-solid fa-chevron-right text-slate-600"></i>
+      <span class="text-blue-400 flex items-center gap-1.5"><i class="fa-solid fa-network-wired"></i> Switch</span>
+      <i class="fa-solid fa-chevron-right text-slate-600"></i>
+      <span class="text-indigo-400 flex items-center gap-1.5"><i class="fa-solid fa-desktop"></i> Host / AP / Server</span>
+    </div>
+  </div>
+
+  <!-- Device Technical Inspection Panel (Right Drawer) -->
+  <aside id="inspection-drawer" class="fixed top-0 right-0 bottom-0 w-full md:w-[450px] z-30 glass-panel shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out p-6 overflow-y-auto flex flex-col justify-between">
+    <div>
+      <!-- Drawer Header -->
+      <div class="flex justify-between items-start pb-4 border-b border-slate-700/60">
+        <div>
+          <span id="drawer-device-type" class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+            Perangkat Jaringan
+          </span>
+          <h2 id="drawer-device-name" class="text-2xl font-black text-white mt-2">Nama Perangkat</h2>
+        </div>
+        <button onclick="closeInspection()" class="touch-btn text-slate-400 hover:text-white bg-slate-800/60 rounded-xl w-10 h-10 flex items-center justify-center hover:bg-slate-700 transition">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Action Buttons: Explode Mode & Link Test -->
+      <div class="grid grid-cols-2 gap-3 my-5">
+        <button id="btn-explode" onclick="toggleExplodeMode()" class="touch-btn bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-xl p-3 flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 transition">
+          <i class="fa-solid fa-cubes-stacked"></i>
+          <span id="lbl-explode">Bongkar Casing 3D</span>
+        </button>
+
+        <button id="btn-linkdown" onclick="toggleLinkDown()" class="touch-btn bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white font-bold rounded-xl p-3 flex items-center justify-center gap-2 shadow-lg shadow-rose-600/20 transition">
+          <i class="fa-solid fa-plug-circle-xmark"></i>
+          <span id="lbl-linkdown">Simulasi Putus Kabel</span>
+        </button>
+      </div>
+
+      <!-- Academic Description -->
+      <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700/50 mb-5">
+        <h3 class="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+          <i class="fa-solid fa-book-open"></i> Fungsi & Penjelasan Akademis
+        </h3>
+        <p id="drawer-desc" class="text-sm text-slate-300 leading-relaxed font-normal">
+          Deskripsi teknis lengkap perangkat akan ditampilkan di sini.
+        </p>
+      </div>
+
+      <!-- Hardware Specs & Internal Components -->
+      <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700/50 mb-5">
+        <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+          <i class="fa-solid fa-microchip"></i> Spesifikasi & Komponen Internal
+        </h3>
+        <p id="drawer-specs" class="text-xs text-slate-400 mb-2 font-mono"></p>
+        <div id="drawer-internals" class="text-xs text-amber-200/90 font-medium bg-amber-950/30 p-2.5 rounded-lg border border-amber-500/20"></div>
+      </div>
+
+      <!-- IPv4 Configuration Form -->
+      <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700/50">
+        <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-sliders"></i> Konfigurasi Antarmuka IPv4 Real-Time
+        </h3>
+        <form onsubmit="event.preventDefault(); saveDeviceIP();" class="space-y-3 text-xs">
+          <div>
+            <label class="block text-slate-400 mb-1 font-semibold">Alamat IPv4 (IP Address):</label>
+            <input type="text" id="cfg-ip" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1 font-semibold">Subnet Mask:</label>
+            <input type="text" id="cfg-subnet" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1 font-semibold">Default Gateway:</label>
+            <input type="text" id="cfg-gateway" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500">
+          </div>
+          <button type="submit" class="touch-btn w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg py-2.5 mt-2 transition shadow-lg shadow-emerald-600/20">
+            Simpan Konfigurasi IP
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Drawer Footer -->
+    <div class="mt-6 pt-4 border-t border-slate-800 text-center">
+      <span class="text-[11px] text-slate-500 font-mono">Modul Interaktif Praktikum Jaringan - SMKN 1 Maja</span>
+    </div>
+  </aside>
+
+  <!-- CLI Terminal Modal Simulation -->
+  <div id="cli-modal" class="fixed inset-0 z-40 bg-black/75 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-4xl h-[85vh] rounded-2xl overflow-hidden flex flex-col border border-emerald-500/40 shadow-2xl">
+      <!-- Terminal Header -->
+      <div class="bg-slate-900 px-5 py-3 flex justify-between items-center border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="flex gap-2">
+            <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+            <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+          </div>
+          <span class="text-xs font-mono font-bold text-emerald-400 ml-2">Cisco IOS / RouterOS Interactive CLI Shell v1.0.4</span>
+        </div>
+        <button onclick="toggleCLI()" class="touch-btn text-slate-400 hover:text-white bg-slate-800 rounded-lg w-8 h-8 flex items-center justify-center">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Terminal Output Display Area -->
+      <div id="cli-output" class="flex-1 p-5 font-mono text-sm text-emerald-400 bg-slate-950 overflow-y-auto space-y-2 select-text">
+        <div class="text-slate-500 text-xs">SMKN 1 Maja Cisco IOS Simulation Shell [Type 'help' for command list]</div>
+        <div class="text-slate-500 text-xs mb-3">----------------------------------------------------------------------</div>
+      </div>
+
+      <!-- Quick Touch Commands Bar for PID Screen -->
+      <div class="bg-slate-900/90 px-4 py-2 border-t border-slate-800 flex gap-2 overflow-x-auto">
+        <button onclick="runQuickCLI('show ip interface brief')" class="touch-btn bg-slate-800 hover:bg-emerald-600 text-emerald-300 text-xs px-3 py-1.5 rounded-lg font-mono whitespace-nowrap">
+          show ip int brief
+        </button>
+        <button onclick="runQuickCLI('ping 202.158.40.1')" class="touch-btn bg-slate-800 hover:bg-emerald-600 text-emerald-300 text-xs px-3 py-1.5 rounded-lg font-mono whitespace-nowrap">
+          ping 202.158.40.1
+        </button>
+        <button onclick="runQuickCLI('traceroute 202.158.40.1')" class="touch-btn bg-slate-800 hover:bg-emerald-600 text-emerald-300 text-xs px-3 py-1.5 rounded-lg font-mono whitespace-nowrap">
+          traceroute 202.158.40.1
+        </button>
+        <button onclick="runQuickCLI('ipconfig')" class="touch-btn bg-slate-800 hover:bg-emerald-600 text-emerald-300 text-xs px-3 py-1.5 rounded-lg font-mono whitespace-nowrap">
+          ipconfig
+        </button>
+        <button onclick="runQuickCLI('clear')" class="touch-btn bg-slate-800 hover:bg-rose-600 text-rose-300 text-xs px-3 py-1.5 rounded-lg font-mono whitespace-nowrap">
+          clear
+        </button>
+      </div>
+
+      <!-- Terminal Input Line -->
+      <form onsubmit="handleCLISubmit(event)" class="bg-slate-900 p-3 flex items-center gap-3 border-t border-slate-800">
+        <span class="text-emerald-400 font-mono font-bold pl-2">Router#</span>
+        <input type="text" id="cli-input" placeholder="Ketik perintah (cth: ping 192.168.1.1)..." autocomplete="off" class="flex-1 bg-transparent border-none text-emerald-300 font-mono text-sm focus:outline-none">
+        <button type="submit" class="touch-btn bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2 rounded-xl text-xs">
+          Kirim
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Quiz Evaluation Modal -->
+  <div id="quiz-modal" class="fixed inset-0 z-40 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-2xl rounded-2xl p-6 md:p-8 relative border border-purple-500/40 shadow-2xl">
+      <button onclick="closeQuiz()" class="touch-btn absolute top-5 right-5 text-slate-400 hover:text-white bg-slate-800/80 rounded-xl w-10 h-10 flex items-center justify-center">
+        <i class="fa-solid fa-xmark text-xl"></i>
+      </button>
+
+      <div id="quiz-start-screen" class="text-center py-6">
+        <div class="w-20 h-20 bg-purple-600/30 text-purple-400 rounded-3xl mx-auto flex items-center justify-center text-4xl mb-4 border border-purple-500/40 shadow-xl">
+          <i class="fa-solid fa-award"></i>
+        </div>
+        <h2 class="text-2xl md:text-3xl font-black text-white mb-2">Evaluasi Pengetahuan Jaringan</h2>
+        <p class="text-sm text-slate-300 max-w-md mx-auto mb-6">
+          Uji pemahaman teknis Anda mengenai perangkat 3D, pengalamatan IPv4, topologi, dan analisis rute packet tracer.
+        </p>
+        <button onclick="startQuizEngine()" class="touch-btn bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-base px-8 py-4 rounded-2xl shadow-xl shadow-purple-600/30 transition">
+          Mulai Evaluasi Interaktif
+        </button>
+      </div>
+
+      <div id="quiz-body" class="hidden">
+        <!-- Progress Bar -->
+        <div class="flex justify-between items-center mb-4 text-xs font-bold text-purple-400">
+          <span id="quiz-progress-lbl">Soal 1 dari 5</span>
+          <span id="quiz-score-lbl">Skor: 0</span>
+        </div>
+        <div class="w-full h-2 bg-slate-800 rounded-full mb-6 overflow-hidden">
+          <div id="quiz-progress-bar" class="h-full bg-gradient-to-r from-purple-500 to-cyan-400 transition-all duration-300" style="width: 20%"></div>
+        </div>
+
+        <h3 id="quiz-question" class="text-lg md:text-xl font-bold text-white mb-6 leading-snug">
+          Pertanyaan kuis akan muncul di sini?
+        </h3>
+
+        <div id="quiz-options" class="space-y-3 mb-6">
+          <!-- Options rendered via JS -->
+        </div>
+
+        <div id="quiz-explanation" class="hidden bg-slate-900/90 p-4 rounded-xl border border-slate-700 text-xs text-slate-300 leading-relaxed"></div>
+      </div>
+
+      <div id="quiz-result-screen" class="hidden text-center py-6">
+        <div class="w-24 h-24 bg-gradient-to-tr from-amber-400 to-yellow-600 rounded-full mx-auto flex items-center justify-center text-4xl text-slate-950 font-black mb-4 shadow-2xl">
+          <i class="fa-solid fa-trophy"></i>
+        </div>
+        <h2 class="text-3xl font-black text-white mb-2">Evaluasi Selesai!</h2>
+        <p class="text-slate-300 text-sm mb-4">Skor Akhir Anda:</p>
+        <div id="quiz-final-score" class="text-6xl font-black text-amber-400 mb-6 font-mono">100</div>
+        <button onclick="startQuizEngine()" class="touch-btn bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-3 rounded-xl shadow-lg">
+          Ulangi Evaluasi
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Developer Credits Modal -->
+  <div id="credits-modal" class="fixed inset-0 z-40 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-xl rounded-2xl p-6 md:p-8 relative border border-rose-500/40 shadow-2xl">
+      <button onclick="closeCredits()" class="touch-btn absolute top-5 right-5 text-slate-400 hover:text-white bg-slate-800/80 rounded-xl w-10 h-10 flex items-center justify-center">
+        <i class="fa-solid fa-xmark text-xl"></i>
+      </button>
+
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-2xl mx-auto flex items-center justify-center text-3xl mb-3 border border-rose-500/30">
+          <i class="fa-solid fa-school-flag"></i>
+        </div>
+        <h2 class="text-2xl font-black text-white">Informasi Kredit Pengembang</h2>
+        <p class="text-xs text-rose-300 font-semibold tracking-wide uppercase mt-1">SMKN 1 Maja - Majalengka</p>
+      </div>
+
+      <div class="space-y-4 mb-6">
+        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-cyan-600/30 border border-cyan-400/40 text-cyan-300 flex items-center justify-center text-xl font-bold">
+            <i class="fa-solid fa-user-gear"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-white text-base">Much. Anton Irawan Sardi, S.T.</h4>
+            <p class="text-xs text-cyan-400 font-medium">Guru dan Kepala Program Keahlian TJKT</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">Penanggung Jawab Materi Technical Networking & Topologi 3D</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-purple-600/30 border border-purple-400/40 text-purple-300 flex items-center justify-center text-xl font-bold">
+            <i class="fa-solid fa-code"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-white text-base">Fikri Alfan Fasha, S.Tr.Kom.</h4>
+            <p class="text-xs text-purple-400 font-medium">Guru PPLG (Pengembangan Perangkat Lunak & Gim)</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">Arsitek Software, Pengembang Simulasi WebGL Three.js & UI Interaktif PID</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800 text-center">
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Aplikasi media pembelajaran interaktif berbasis web statis ini dikembangkan khusus untuk mengoptimalkan pembelajaran praktek jaringan komputer pada Papan Interaktif Digital (PID).
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Main Application Engine -->
+  <script>
+    /* ========================================================================
+       1. WEB AUDIO API SYNTHESIZER ENGINE (No External Audio Files Needed)
+       ======================================================================== */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+      }
+      playTone(freq, type, duration) {
+        this.init();
+        if (!this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch(e) {}
+      }
+      click() { this.playTone(800, 'sine', 0.05); }
+      correct() {
+        this.playTone(523.25, 'sine', 0.1);
+        setTimeout(() => this.playTone(659.25, 'sine', 0.15), 100);
+        setTimeout(() => this.playTone(783.99, 'sine', 0.25), 200);
+      }
+      wrong() {
+        this.playTone(220, 'sawtooth', 0.15);
+        setTimeout(() => this.playTone(180, 'sawtooth', 0.25), 120);
+      }
+      linkDown() {
+        this.playTone(300, 'square', 0.15);
+        setTimeout(() => this.playTone(150, 'square', 0.3), 150);
+      }
+    }
+    const audioSynth = new SoundEngine();
+
+    /* ========================================================================
+       2. DATA TOPOLOGI & PERANGKAT JARINAGAN
+       ======================================================================== */
+    const devicesData = [
+      {
+        id: 'cloud',
+        name: 'Awan Internet (WAN Cloud)',
+        type: 'Global Network Provider',
+        pos: [-16, 1.8, -2],
+        ip: '202.158.40.1',
+        subnet: '255.255.255.252',
+        gateway: '202.158.40.2',
+        desc: 'Gerbang koneksi Wide Area Network (WAN) publik yang menghubungkan Autonomous System (AS) lokal ke backbone internet global menggunakan protokol BGP.',
+        specs: 'Throughput: 10 Gbps DWDM Optical Trunking | Protocol: BGP v4, IPv4/IPv6 Dual Stack',
+        internals: 'Pusat routing ISP, Fiber Gateway Multiplexer, Edge Router BGP High-Capacity.',
+        linkDown: false,
+        activeExplode: false
+      },
+      {
+        id: 'onu',
+        name: 'Optical Network Unit (ONU/ONT)',
+        type: 'Optical Demodulator',
+        pos: [-11, 1.5, -1],
+        ip: '192.168.100.1',
+        subnet: '255.255.255.0',
+        gateway: '202.158.40.1',
+        desc: 'Perangkat terminal GPON/EPON yang mendemodulasi sinyal cahaya dari serat optik (SC/APC green port) menjadi sinyal elektrik Ethernet (RJ45 Cat6).',
+        specs: 'Standard: ITU-T G.984 GPON | Wavelength: 1490nm RX / 1310nm TX | Port: SC/APC Optik + 4x GbE',
+        internals: 'BOSA (Bidirectional Optical Sub-Assembly), Chipset GPON MAC/PHY, SOC Transceiver, EEPROM Firmware.',
+        linkDown: false,
+        activeExplode: false
+      },
+      {
+        id: 'firewall',
+        name: 'Hardware Firewall Appliance',
+        type: 'Network Security Engine',
+        pos: [-5.5, 1.5, 0],
+        ip: '192.168.1.1',
+        subnet: '255.255.255.0',
+        gateway: '192.168.100.1',
+        desc: 'Memeriksa lalu lintas data L3-L7 menggunakan Stateful Packet Inspection (SPI) dan Deep Packet Inspection (DPI) untuk mencegah intrusion, malware, dan akses ilegal.',
+        specs: 'SPI Throughput: 5 Gbps | Concurrent Sessions: 500,000 | Interfaces: 4x RJ45 GbE + 2x SFP+ 10G',
+        internals: 'ASIC Security Accelerator Chip, Dedicated Crypto Co-Processor, Multi-core Processor, ECC RAM DDR4, Passive Heatsink Array.',
+        linkDown: false,
+        activeExplode: false
+      },
+      {
+        id: 'router',
+        name: 'Enterprise Edge Router',
+        type: 'Layer 3 Routing Engine',
+        pos: [0, 1.5, 1],
+        ip: '192.168.1.254',
+        subnet: '255.255.255.0',
+        gateway: '192.168.1.1',
+        desc: 'Perangkat Layer 3 yang mengarahkan paket data antar subnet/VLAN berbeda menggunakan tabel routing (OSPF, RIP, Static), NAT, serta DHCP Server.',
+        specs: 'Routing Engine: Quad-Core 1.4GHz RISC | Memory: 2GB DDR4 | Ports: 8x RJ45 Gigabit + 2x SFP+ 10G',
+        internals: 'Mainboard PCB, Dual Aluminum Heatsink Processor, Memory Chip DDR4, SFP+ Cage Interconnects, Internal Switching Power Supply (PSU).',
+        linkDown: false,
+        activeExplode: false
+      },
+      {
+        id: 'switch',
+        name: 'Managed Switch 24-Port L2/L3',
+        type: 'High-Density Switching Unit',
+        pos: [5.5, 1.5, 0],
+        ip: '192.168.1.2',
+        subnet: '255.255.255.0',
+        gateway: '192.168.1.254',
+        desc: 'Menghubungkan seluruh perangkat LAN berdasarkan MAC Address Table (CAM Table). Mendukung 802.1Q VLAN, Spanning Tree Protocol (STP), Port Security, dan LACP.',
+        specs: 'Switching Capacity: 128 Gbps | Forwarding Rate: 95 Mpps | 24x RJ45 Gigabit + 4x SFP+ 10G Uplink',
+        internals: 'High-Speed Switch ASIC Chip, 24-Port Dual Density RJ45 Transformer Blocks, SFP Controller Unit, Power Regulator Module.',
+        linkDown: false,
+        activeExplode: false
+      },
+      {
+        id: 'server',
+        name: 'Rackmount Enterprise Server 2U',
+        type: 'Central Data Node',
+        pos: [11, 1.8, -3.5],
+        ip: '192.168.1.10',
+        subnet: '255.255.255.0',
+        gateway: '192.168.1.254',
+        desc: 'Menyediakan layanan jaringan terpusat seperti Active Directory/DNS, Web Server (HTTP/HTTPS), Database MySQL, serta Virtualisasi Server (Hypervisor).',
+        specs: 'CPU: Dual Xeon Enterprise | RAM: 64GB DDR4 ECC | Storage: 4x Hot-Swap SAS SSD RAID 10 | Quad-GbE NIC',
+        internals: 'Dual Socket CPU Cooling Towers, 8x ECC RAM DIMM Slots, Redundant Dual Hot-Swap PSU (750W), PCIe RAID Card, Front Caddy Trays.',
+        linkDown: false,
+        activeExplode: false
+      },
+      {
+        id: 'ap',
+        name: 'Access Point Wi-Fi 6 Enterprise',
+        type: 'Wireless Transceiver (AP)',
+        pos: [11, 1.8, 0.5],
+        ip: '192.168.1.15',
+        subnet: '255.255.255.0',
+        gateway: '192.168.1.254',
+        desc: 'Mengonversi sinyal jaringan kabel Ethernet (PoE+) menjadi gelombang radio frekuensi 2.4GHz dan 5GHz (802.11ax) dengan teknologi MU-MIMO dan OFDMA.',
+        specs: 'Standard: Wi-Fi 6 (802.11ax) | Speed: 3.0 Gbps | Antenna: 4x4 MU-MIMO Internal | Power: 802.3at PoE+',
+        internals: 'Circular Base Board, 360-degree Omnidirectional Antenna Ring, Wi-Fi 6 Transceiver SoC, Metal Shield Heatsink Plate, RGB Halo Ring LED Driver.',
+        linkDown: false,
+        activeExplode: false
+      },
+      {
+        id: 'laptop',
+        name: 'Workstation Laptop Client',
+        type: 'End-Host Device',
+        pos: [11, 1.5, 4.5],
+        ip: '192.168.1.100',
+        subnet: '255.255.255.0',
+        gateway: '192.168.1.254',
+        desc: 'Perangkat pengakses akhir (End Host) tempat pengguna menjalankan aplikasi client dan berkomunikasi dalam jaringan lokal maupun WAN.',
+        specs: 'NIC: Gigabit Ethernet RJ45 + Wi-Fi 6 | IP Assignment: DHCP Client | OS: Enterprise Network Client',
+        internals: 'Mainboard Laptop, Integrated Processor & GPU, M.2 NVMe SSD, Li-ion Battery Module, Display Flex Cable.',
+        linkDown: false,
+        activeExplode: false
+      }
+    ];
+
+    /* ========================================================================
+       3. THREE.JS 3D SCENE & PROCEDURAL MODELING ENGINE
+       ======================================================================== */
+    let scene, camera, renderer, controls;
+    let device3DObjects = {}; // Mapping ID -> THREE.Group
+    let cableCurves = [];     // Array of curves for data packets
+    let packetPulses = [];    // Array of animated packet meshes
+    let selectedDevice = null;
+
+    // Smooth Camera Transition State
+    let isCameraLerping = false;
+    let targetCameraPos = new THREE.Vector3();
+    let targetLookAtPos = new THREE.Vector3();
+
+    // Material Library
+    const mats = {
+      darkMetal: new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.25 }),
+      silverMetal: new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9, roughness: 0.2 }),
+      redMetal: new THREE.MeshStandardMaterial({ color: 0x991b1b, metalness: 0.7, roughness: 0.3 }),
+      pcbGreen: new THREE.MeshStandardMaterial({ color: 0x065f46, roughness: 0.4 }),
+      chipBlack: new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2, metalness: 0.3 }),
+      goldPin: new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.95, roughness: 0.1 }),
+      ceramicWhite: new THREE.MeshPhysicalMaterial({ color: 0xf8fafc, roughness: 0.15, metalness: 0.05, clearcoat: 1.0, clearcoatRoughness: 0.1 }),
+      ledGreen: new THREE.MeshStandardMaterial({ color: 0x4ade80, emissive: 0x16a34a, emissiveIntensity: 1.2 }),
+      ledRed: new THREE.MeshStandardMaterial({ color: 0xf87171, emissive: 0xd97706, emissiveIntensity: 1.2 }),
+      ledBlue: new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 1.5 }),
+      cableUtp: new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4 }),
+      cableFiber: new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.3 }),
+      cableDown: new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5 })
+    };
+
+    function initThreeJS() {
+      const container = document.getElementById('canvas-container');
+
+      // 1. Scene & Fog
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0b0f19);
+      scene.fog = new THREE.FogExp2(0x0b0f19, 0.018);
+
+      // 2. Camera Setup (Perspective FOV 45°)
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(0, 10, 26);
+
+      // 3. Renderer (High Performance ACESFilmic Tone Mapping)
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      // 4. Orbit Controls with Camera Limits
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.minDistance = 2;
+      controls.maxDistance = 45;
+      controls.maxPolarAngle = Math.PI / 2.05; // Prevent breaking floor grid
+      controls.target.set(0, 1.5, 0);
+
+      // 5. Lighting Setup (PBR Multi-light)
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+      scene.add(ambientLight);
+
+      const mainLight = new THREE.DirectionalLight(0xffffff, 1.4);
+      mainLight.position.set(15, 25, 15);
+      mainLight.castShadow = true;
+      mainLight.shadow.mapSize.width = 2048;
+      mainLight.shadow.mapSize.height = 2048;
+      mainLight.shadow.bias = -0.0001;
+      scene.add(mainLight);
+
+      const blueFillLight = new THREE.PointLight(0x0284c7, 2, 30);
+      blueFillLight.position.set(-10, 8, -5);
+      scene.add(blueFillLight);
+
+      const cyanFillLight = new THREE.PointLight(0x06b6d4, 2, 30);
+      cyanFillLight.position.set(10, 8, 5);
+      scene.add(cyanFillLight);
+
+      // 6. Floor Grid Studio
+      const gridHelper = new THREE.GridHelper(60, 60, 0x0284c7, 0x1e293b);
+      gridHelper.position.y = 0;
+      scene.add(gridHelper);
+
+      // 7. Build Procedural 3D Network Devices
+      buildAllDevices();
+
+      // 8. Build 3D UTP/Fiber Cables & Data Packets
+      buildCablesAndPackets();
+
+      // 9. Generate Projected HTML Floating Hotspots
+      createHTMLHotspots();
+
+      // 10. Event Listeners
+      window.addEventListener('resize', onWindowResize);
+      renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+      // 11. Start Animation Loop
+      animate();
+    }
+
+    /* ========================================================================
+       4. PROCEDURAL 3D HARDWARE MODEL BUILDERS
+       ======================================================================== */
+    function buildAllDevices() {
+      devicesData.forEach(dev => {
+        const devGroup = new THREE.Group();
+        devGroup.position.set(...dev.pos);
+        devGroup.userData = dev;
+
+        const casingGroup = new THREE.Group();
+        const internalGroup = new THREE.Group();
+        devGroup.add(internalGroup);
+        devGroup.add(casingGroup);
+
+        switch (dev.id) {
+          case 'cloud': createCloudMesh(casingGroup, internalGroup); break;
+          case 'onu': createOnuMesh(casingGroup, internalGroup); break;
+          case 'firewall': createFirewallMesh(casingGroup, internalGroup); break;
+          case 'router': createRouterMesh(casingGroup, internalGroup); break;
+          case 'switch': createSwitchMesh(casingGroup, internalGroup); break;
+          case 'server': createServerMesh(casingGroup, internalGroup); break;
+          case 'ap': createApMesh(casingGroup, internalGroup); break;
+          case 'laptop': createLaptopMesh(casingGroup, internalGroup); break;
+        }
+
+        scene.add(devGroup);
+        device3DObjects[dev.id] = { group: devGroup, casing: casingGroup, internal: internalGroup };
+      });
+    }
+
+    // Awan Internet Mesh
+    function createCloudMesh(casing, internal) {
+      const geo = new THREE.IcosahedronGeometry(1.6, 2);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x0284c7, wireframe: true, emissive: 0x0369a1 });
+      const mesh = new THREE.Mesh(geo, mat);
+      casing.add(mesh);
+
+      const coreGeo = new THREE.SphereGeometry(0.9, 16, 16);
+      const coreMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+      const core = new THREE.Mesh(coreGeo, coreMat);
+      internal.add(core);
+    }
+
+    // Optical Modem ONU Mesh
+    function createOnuMesh(casing, internal) {
+      // Internal PCB & Optical Module
+      const pcb = new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 1.6), mats.pcbGreen);
+      pcb.position.y = 0.1;
+      internal.add(pcb);
+
+      const bosa = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.4), mats.silverMetal);
+      bosa.position.set(-0.6, 0.25, -0.4);
+      internal.add(bosa);
+
+      // Casing Top
+      const bodyGeo = new THREE.BoxGeometry(2.2, 0.6, 1.8);
+      const body = new THREE.Mesh(bodyGeo, mats.ceramicWhite);
+      body.position.y = 0.3;
+      body.castShadow = true;
+      casing.add(body);
+
+      // SC/APC Green Port
+      const port = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.25, 0.3), new THREE.MeshStandardMaterial({ color: 0x16a34a }));
+      port.position.set(-0.8, 0.3, 0.95);
+      casing.add(port);
+    }
+
+    // Hardware Firewall Mesh
+    function createFirewallMesh(casing, internal) {
+      // Internal Security ASIC & Heatsink
+      const pcb = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.1, 2.0), mats.pcbGreen);
+      internal.add(pcb);
+
+      const heatsink = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.8), mats.darkMetal);
+      heatsink.position.set(0, 0.25, 0);
+      internal.add(heatsink);
+
+      // Casing Appliance Red Accent
+      const body = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.5, 2.2), mats.redMetal);
+      body.position.y = 0.25;
+      body.castShadow = true;
+      casing.add(body);
+
+      // Front Face Grid
+      const face = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.4, 0.05), mats.darkMetal);
+      face.position.set(0, 0.25, 1.11);
+      casing.add(face);
+    }
+
+    // Enterprise Router Mesh
+    function createRouterMesh(casing, internal) {
+      // Internals: CPU Heatsink & RAM
+      const pcb = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 2.2), mats.pcbGreen);
+      internal.add(pcb);
+
+      const cpuHs = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.7), mats.silverMetal);
+      cpuHs.position.set(-0.5, 0.25, 0);
+      internal.add(cpuHs);
+
+      const ram = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.25, 0.8), mats.chipBlack);
+      ram.position.set(0.5, 0.2, 0);
+      internal.add(ram);
+
+      // Outer Metal Case
+      const body = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.6, 2.4), mats.darkMetal);
+      body.position.y = 0.3;
+      body.castShadow = true;
+      casing.add(body);
+
+      // Ports Array (RJ45 + SFP+)
+      for (let i = 0; i < 6; i++) {
+        const rj = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.2, 0.1), mats.silverMetal);
+        rj.position.set(-1.2 + i * 0.35, 0.25, 1.21);
+        casing.add(rj);
+      }
+    }
+
+    // Managed Switch 24-Port Mesh
+    function createSwitchMesh(casing, internal) {
+      // Internal Switch ASIC Fabric
+      const pcb = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.1, 2.4), mats.pcbGreen);
+      internal.add(pcb);
+
+      const asic = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.25, 1.0), mats.chipBlack);
+      asic.position.set(0, 0.2, 0);
+      internal.add(asic);
+
+      // Casing Unit
+      const body = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.5, 2.6), mats.darkMetal);
+      body.position.y = 0.25;
+      body.castShadow = true;
+      casing.add(body);
+
+      // 24 RJ45 Ports (2 rows of 12)
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 12; c++) {
+          const port = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.12, 0.08), mats.silverMetal);
+          port.position.set(-1.6 + c * 0.22, 0.32 - r * 0.15, 1.31);
+          casing.add(port);
+        }
+      }
+    }
+
+    // 2U Enterprise Server Mesh
+    function createServerMesh(casing, internal) {
+      // Internal Dual CPU Towers & RAM Banks
+      const pcb = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.1, 3.2), mats.pcbGreen);
+      internal.add(pcb);
+
+      const cpu1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.8), mats.silverMetal);
+      cpu1.position.set(-0.8, 0.35, -0.2);
+      internal.add(cpu1);
+
+      const cpu2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.8), mats.silverMetal);
+      cpu2.position.set(0.8, 0.35, -0.2);
+      internal.add(cpu2);
+
+      // Casing 2U Body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.9, 3.4), mats.silverMetal);
+      body.position.y = 0.45;
+      body.castShadow = true;
+      casing.add(body);
+
+      // Front Honeycomb Caddy Bays
+      for (let i = 0; i < 4; i++) {
+        const caddy = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.7, 0.1), mats.darkMetal);
+        caddy.position.set(-1.4 + i * 0.95, 0.45, 1.71);
+        casing.add(caddy);
+      }
+    }
+
+    // Access Point Wi-Fi 6 Mesh
+    function createApMesh(casing, internal) {
+      // Internal Antenna Array Ring
+      const pcb = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.08, 32), mats.pcbGreen);
+      internal.add(pcb);
+
+      // Dome Casing White Ceramic
+      const domeGeo = new THREE.CylinderGeometry(1.4, 1.5, 0.35, 32);
+      const dome = new THREE.Mesh(domeGeo, mats.ceramicWhite);
+      dome.position.y = 0.2;
+      casing.add(dome);
+
+      // RGB LED Halo Ring
+      const ringGeo = new THREE.TorusGeometry(1.35, 0.04, 16, 64);
+      const ring = new THREE.Mesh(ringGeo, mats.ledBlue);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.05;
+      casing.add(ring);
+    }
+
+    // Workstation Laptop Mesh
+    function createLaptopMesh(casing, internal) {
+      // Internal Battery & NVMe
+      const bat = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.6), mats.chipBlack);
+      bat.position.set(0, 0.08, 0.5);
+      internal.add(bat);
+
+      // Base Body
+      const base = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.12, 1.6), mats.darkMetal);
+      base.position.y = 0.06;
+      casing.add(base);
+
+      // Screen Lid Opened
+      const screenGroup = new THREE.Group();
+      screenGroup.position.set(0, 0.12, -0.8);
+      screenGroup.rotation.x = -Math.PI / 3;
+
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.5, 0.08), mats.darkMetal);
+      lid.position.set(0, 0.75, 0);
+      screenGroup.add(lid);
+
+      const display = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.3), new THREE.MeshBasicMaterial({ color: 0x0284c7 }));
+      display.position.set(0, 0.75, 0.045);
+      screenGroup.add(display);
+
+      casing.add(screenGroup);
+    }
+
+    /* ========================================================================
+       5. 3D CABLES (CatmullRomCurve3) & ANIMATED PACKET PULSES
+       ======================================================================== */
+    function buildCablesAndPackets() {
+      const connections = [
+        { from: 'cloud', to: 'onu', type: 'fiber' },
+        { from: 'onu', to: 'firewall', type: 'utp' },
+        { from: 'firewall', to: 'router', type: 'utp' },
+        { from: 'router', to: 'switch', type: 'utp' },
+        { from: 'switch', to: 'server', type: 'utp' },
+        { from: 'switch', to: 'ap', type: 'utp' },
+        { from: 'switch', to: 'laptop', type: 'utp' }
+      ];
+
+      connections.forEach(conn => {
+        const p1 = new THREE.Vector3(...devicesData.find(d => d.id === conn.from).pos);
+        const p2 = new THREE.Vector3(...devicesData.find(d => d.id === conn.to).pos);
+
+        // Control point for smooth sagging curve
+        const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+        mid.y -= 0.6; 
+
+        const curve = new THREE.CatmullRomCurve3([p1, mid, p2]);
+        const tubeGeo = new THREE.TubeGeometry(curve, 32, 0.05, 8, false);
+        const tubeMat = conn.type === 'fiber' ? mats.cableFiber : mats.cableUtp;
+        const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+        scene.add(tubeMesh);
+
+        cableCurves.push({ conn, curve, mesh: tubeMesh, defaultMat: tubeMat });
+
+        // Create glowing animated data packet sphere
+        const packetGeo = new THREE.SphereGeometry(0.12, 12, 12);
+        const packetMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+        const packetMesh = new THREE.Mesh(packetGeo, packetMat);
+        scene.add(packetMesh);
+
+        packetPulses.push({
+          mesh: packetMesh,
+          curve: curve,
+          progress: Math.random(),
+          speed: 0.005 + Math.random() * 0.004,
+          conn: conn
+        });
+      });
+    }
+
+    /* ========================================================================
+       6. PROJECTED 2D/3D FLOATING HOTSPOTS FOR PID TOUCH TARGETS
+       ======================================================================== */
+    function createHTMLHotspots() {
+      const container = document.getElementById('hotspot-container');
+      container.innerHTML = '';
+
+      devicesData.forEach(dev => {
+        const btn = document.createElement('button');
+        btn.id = `hotspot-${dev.id}`;
+        btn.className = `hotspot-pulse absolute pointer-events-auto touch-btn w-12 h-12 rounded-full bg-cyan-500/80 border-2 border-white text-white font-black flex items-center justify-center text-sm shadow-xl transform -translate-x-1/2 -translate-y-1/2 hover:scale-125 transition`;
+        btn.innerHTML = `<i class="fa-solid fa-hand-pointer"></i>`;
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          selectDevice(dev.id);
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    function updateHotspotPositions() {
+      const vector = new THREE.Vector3();
+
+      devicesData.forEach(dev => {
+        const btn = document.getElementById(`hotspot-${dev.id}`);
+        if (!btn) return;
+
+        // Position hotspot slightly above object center
+        vector.set(dev.pos[0], dev.pos[1] + 1.6, dev.pos[2]);
+        vector.project(camera);
+
+        // Check if behind camera
+        if (vector.z > 1) {
+          btn.style.display = 'none';
+          return;
+        }
+
+        btn.style.display = 'flex';
+        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-(vector.y * 0.5) + 0.5) * window.innerHeight;
+        btn.style.left = `${x}px`;
+        btn.style.top = `${y}px`;
+      });
+    }
+
+    /* ========================================================================
+       7. INTERACTION & CAMERA LERPING
+       ======================================================================== */
+    function onPointerDown(event) {
+      // Raycasting detection on 3D objects
+      const pointer = new THREE.Vector2(
+        (event.clientX / window.innerWidth) * 2 - 1,
+        -(event.clientY / window.innerHeight) * 2 + 1
+      );
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(pointer, camera);
+
+      const interactiveMeshes = [];
+      Object.values(device3DObjects).forEach(obj => {
+        obj.group.traverse(child => {
+          if (child.isMesh) interactiveMeshes.push(child);
+        });
+      });
+
+      const intersects = raycaster.intersectObjects(interactiveMeshes);
+      if (intersects.length > 0) {
+        let curr = intersects[0].object;
+        while (curr && !curr.userData.id && curr.parent) {
+          curr = curr.parent;
+        }
+        if (curr && curr.userData.id) {
+          selectDevice(curr.userData.id);
+        }
+      }
+    }
+
+    function selectDevice(id) {
+      audioSynth.click();
+      const dev = devicesData.find(d => d.id === id);
+      if (!dev) return;
+
+      selectedDevice = dev;
+
+      // Set target camera smooth transition
+      targetCameraPos.set(dev.pos[0], dev.pos[1] + 2.5, dev.pos[2] + 7);
+      targetLookAtPos.set(dev.pos[0], dev.pos[1] + 0.5, dev.pos[2]);
+      isCameraLerping = true;
+
+      // Populate & Open Inspection Drawer
+      document.getElementById('drawer-device-type').innerText = dev.type;
+      document.getElementById('drawer-device-name').innerText = dev.name;
+      document.getElementById('drawer-desc').innerText = dev.desc;
+      document.getElementById('drawer-specs').innerText = dev.specs;
+      document.getElementById('drawer-internals').innerText = `Elemen Internal Explode: ${dev.internals}`;
+      
+      document.getElementById('cfg-ip').value = dev.ip;
+      document.getElementById('cfg-subnet').value = dev.subnet;
+      document.getElementById('cfg-gateway').value = dev.gateway;
+
+      updateDrawerButtonsState();
+      document.getElementById('inspection-drawer').classList.remove('translate-x-full');
+    }
+
+    function closeInspection() {
+      audioSynth.click();
+      document.getElementById('inspection-drawer').classList.add('translate-x-full');
+    }
+
+    function resetCamera() {
+      audioSynth.click();
+      targetCameraPos.set(0, 10, 26);
+      targetLookAtPos.set(0, 1.5, 0);
+      isCameraLerping = true;
+      closeInspection();
+    }
+
+    /* ========================================================================
+       8. EXPLOEDE MODE & LINK DOWN SIMULATION ENGINE
+       ======================================================================== */
+    function toggleExplodeMode() {
+      if (!selectedDevice) return;
+      audioSynth.click();
+
+      selectedDevice.activeExplode = !selectedDevice.activeExplode;
+      const targetY = selectedDevice.activeExplode ? 1.8 : 0;
+      
+      const obj = device3DObjects[selectedDevice.id];
+      if (obj) {
+        // Animate casing lift up
+        let startY = obj.casing.position.y;
+        let startTime = performance.now();
+        
+        function animateExplode(now) {
+          let elapsed = (now - startTime) / 300;
+          if (elapsed > 1) elapsed = 1;
+          obj.casing.position.y = THREE.MathUtils.lerp(startY, targetY, elapsed);
+          if (elapsed < 1) requestAnimationFrame(animateExplode);
+        }
+        requestAnimationFrame(animateExplode);
+      }
+
+      updateDrawerButtonsState();
+    }
+
+    function toggleLinkDown() {
+      if (!selectedDevice) return;
+      selectedDevice.linkDown = !selectedDevice.linkDown;
+
+      if (selectedDevice.linkDown) {
+        audioSynth.linkDown();
+      } else {
+        audioSynth.click();
+      }
+
+      // Update Cable Colors for affected link segments
+      cableCurves.forEach(item => {
+        if (item.conn.from === selectedDevice.id || item.conn.to === selectedDevice.id) {
+          item.mesh.material = selectedDevice.linkDown ? mats.cableDown : item.defaultMat;
+        }
+      });
+
+      updateDrawerButtonsState();
+    }
+
+    function updateDrawerButtonsState() {
+      if (!selectedDevice) return;
+
+      const lblExplode = document.getElementById('lbl-explode');
+      lblExplode.innerText = selectedDevice.activeExplode ? 'Pasang Casing' : 'Bongkar Casing 3D';
+
+      const btnLink = document.getElementById('btn-linkdown');
+      const lblLink = document.getElementById('lbl-linkdown');
+      if (selectedDevice.linkDown) {
+        lblLink.innerText = 'Pulihkan Kabel (UP)';
+        btnLink.className = 'touch-btn bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 text-white font-bold rounded-xl p-3 flex items-center justify-center gap-2 shadow-lg transition';
+      } else {
+        lblLink.innerText = 'Simulasi Putus Kabel';
+        btnLink.className = 'touch-btn bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 text-white font-bold rounded-xl p-3 flex items-center justify-center gap-2 shadow-lg transition';
+      }
+    }
+
+    function saveDeviceIP() {
+      if (!selectedDevice) return;
+      audioSynth.correct();
+
+      selectedDevice.ip = document.getElementById('cfg-ip').value;
+      selectedDevice.subnet = document.getElementById('cfg-subnet').value;
+      selectedDevice.gateway = document.getElementById('cfg-gateway').value;
+
+      alert(`Konfigurasi IP untuk ${selectedDevice.name} berhasil diperbarui!`);
+    }
+
+    /* ========================================================================
+       9. CLI TERMINAL SIMULATION ENGINE (Cisco IOS Style)
+       ======================================================================== */
+    function toggleCLI() {
+      audioSynth.click();
+      const modal = document.getElementById('cli-modal');
+      modal.classList.toggle('hidden');
+    }
+
+    function runQuickCLI(cmdText) {
+      document.getElementById('cli-input').value = cmdText;
+      handleCLISubmit(new Event('submit'));
+    }
+
+    function handleCLISubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('cli-input');
+      const cmd = input.value.trim();
+      if (!cmd) return;
+
+      audioSynth.click();
+      const output = document.getElementById('cli-output');
+
+      // Append user command
+      const cmdLine = document.createElement('div');
+      cmdLine.className = 'text-white font-bold mt-2';
+      cmdLine.innerText = `Router# ${cmd}`;
+      output.appendChild(cmdLine);
+
+      // Execute command logic
+      const args = cmd.split(' ');
+      const mainCmd = args[0].toLowerCase();
+
+      if (mainCmd === 'help') {
+        appendCLIOutput(`Perintah CLI Terpolarisasi PID:
+  show ip interface brief  : Menampilkan status antarmuka IP topologi
+  ping [IP]                : Uji konektivitas paket ICMP Echo
+  traceroute [IP]          : Pelacakan hop rute paket data
+  ipconfig / ifconfig      : Informasi IP host lokal
+  clear                    : Bersihkan layar terminal`);
+      } 
+      else if (mainCmd === 'show' && args[1] === 'ip') {
+        let res = `Interface        IP-Address      OK? Method Status                Protocol\n`;
+        devicesData.forEach(d => {
+          const statusStr = d.linkDown ? 'DOWN                  DOWN' : 'UP                    UP';
+          res += `${d.id.padEnd(16)} ${d.ip.padEnd(15)} YES manual ${statusStr}\n`;
+        });
+        appendCLIOutput(res);
+      }
+      else if (mainCmd === 'ping') {
+        const targetIP = args[1];
+        const targetDev = devicesData.find(d => d.ip === targetIP);
+        
+        // Check if any link along path is down
+        const isAnyDown = devicesData.some(d => d.linkDown);
+
+        if (!targetIP) {
+          appendCLIOutput('% Error: Harap masukkan IP tujuan. Contoh: ping 192.168.1.10');
+        } else if (!targetDev) {
+          appendCLIOutput(`Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to ${targetIP}, timeout is 2 seconds:
+.....
+Success rate is 0 percent (0/5)`);
+        } else if (isAnyDown) {
+          appendCLIOutput(`Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to ${targetIP}, timeout is 2 seconds:
+U.U.U (Destination Host Unreachable / Link Down Detected)
+Success rate is 0 percent (0/5)`);
+        } else {
+          appendCLIOutput(`Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to ${targetIP}, timeout is 2 seconds:
+!!!!!
+Success rate is 100 percent (5/5), round-trip min/avg/max = 1/2/4 ms`);
+        }
+      }
+      else if (mainCmd === 'traceroute') {
+        const targetIP = args[1];
+        const isAnyDown = devicesData.some(d => d.linkDown);
+
+        if (!targetIP) {
+          appendCLIOutput('% Error: Harap masukkan IP tujuan. Contoh: traceroute 202.158.40.1');
+        } else if (isAnyDown) {
+          appendCLIOutput(`Tracing the route to ${targetIP}
+  1 192.168.1.254 1 ms 1 ms 1 ms
+  2 * * * (Request Timed Out / Connection Severed)`);
+        } else {
+          appendCLIOutput(`Tracing the route to ${targetIP}
+  1  192.168.1.254 (Enterprise Router)  1 ms  1 ms  1 ms
+  2  192.168.1.1   (Hardware Firewall)  2 ms  1 ms  2 ms
+  3  192.168.100.1 (Optical ONU)        3 ms  3 ms  4 ms
+  4  202.158.40.1  (WAN Internet Cloud) 8 ms  7 ms  8 ms
+Trace complete.`);
+        }
+      }
+      else if (mainCmd === 'ipconfig' || mainCmd === 'ifconfig') {
+        appendCLIOutput(`FastEthernet0/0 Configuration:
+   IPv4 Address. . . . . . . . . . . : 192.168.1.100
+   Subnet Mask . . . . . . . . . . . : 255.255.255.0
+   Default Gateway . . . . . . . . . : 192.168.1.254
+   MAC Address . . . . . . . . . . . : 00-1A-2B-3C-4D-5E`);
+      }
+      else if (mainCmd === 'clear') {
+        output.innerHTML = '';
+      }
+      else {
+        appendCLIOutput(`% Unknown command: "${cmd}". Type 'help' for assistance.`);
+      }
+
+      input.value = '';
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function appendCLIOutput(text) {
+      const output = document.getElementById('cli-output');
+      const div = document.createElement('pre');
+      div.className = 'text-emerald-400 font-mono text-xs whitespace-pre-wrap';
+      div.innerText = text;
+      output.appendChild(div);
+    }
+
+    /* ========================================================================
+       10. QUIZ EVALUATION ENGINE
+       ======================================================================== */
+    const quizQuestions = [
+      {
+        q: "Manakah perangkat yang bertugas mendemodulasi sinyal cahaya optik menjadi sinyal elektrik Ethernet pada jaringan FTTH?",
+        options: ["Enterprise Router", "Optical Network Unit (ONU/ONT)", "Managed Switch 24-Port", "Hardware Firewall"],
+        answer: 1,
+        exp: "ONU/ONT berfungsi mengonversi sinyal optik (cahaya) dari kabel fiber optic (SC/APC) menjadi sinyal elektrik RJ45."
+      },
+      {
+        q: "Perangkat Layer 3 yang bertugas menghubungkan dua subnet/VLAN yang berbeda serta mengelola NAT dan DHCP adalah...",
+        options: ["Access Point", "Enterprise Router", "Unmanaged Switch", "Media Converter"],
+        answer: 1,
+        exp: "Router bekerja pada Layer 3 (Network Layer) untuk merutekan paket data antar subnet IP yang berbeda."
+      },
+      {
+        q: "Tabel apakah yang digunakan oleh Managed Switch untuk meneruskan frame data berdasarkan alamat fisik (MAC Address)?",
+        options: ["Routing Table", "CAM / MAC Address Table", "ARP Table", "DNS Cache"],
+        answer: 1,
+        exp: "Switch Layer 2 menyimpan pemetaan Port ke Alamat Fisik pada CAM (Content Addressable Memory) / MAC Table."
+      },
+      {
+        q: "Teknologi nirkabel Wi-Fi 6 (802.11ax) menggunakan fungsi utama ini untuk melayani banyak klien secara bersamaan tanpa lag:",
+        options: ["OFDMA & MU-MIMO", "WEP Encryption", "CSMA/CD", "Half-Duplex Channeling"],
+        answer: 0,
+        exp: "Wi-Fi 6 memanfaatkan OFDMA dan MU-MIMO untuk efisiensi spektrum frekuensi saat melayani multiple device."
+      },
+      {
+        q: "Komponen internal mana yang berfungsi mempercepat komputasi enkripsi/dekripsi dan pemeriksaan paket pada Hardware Firewall?",
+        options: ["BOSA Module", "Security ASIC Accelerator Chip", "SFP Transceiver", "Caddy Drive Tray"],
+        answer: 1,
+        exp: "ASIC (Application-Specific Integrated Circuit) khusus keamanan memproses Deep Packet Inspection (DPI) secara hardware-accelerated."
+      }
+    ];
+
+    let currentQ = 0;
+    let score = 0;
+
+    function openQuiz() {
+      audioSynth.click();
+      document.getElementById('quiz-modal').classList.remove('hidden');
+      document.getElementById('quiz-start-screen').classList.remove('hidden');
+      document.getElementById('quiz-body').classList.add('hidden');
+      document.getElementById('quiz-result-screen').classList.add('hidden');
+    }
+
+    function closeQuiz() {
+      audioSynth.click();
+      document.getElementById('quiz-modal').classList.add('hidden');
+    }
+
+    function startQuizEngine() {
+      audioSynth.click();
+      currentQ = 0;
+      score = 0;
+      document.getElementById('quiz-start-screen').classList.add('hidden');
+      document.getElementById('quiz-result-screen').classList.add('hidden');
+      document.getElementById('quiz-body').classList.remove('hidden');
+      renderQuestion();
+    }
+
+    function renderQuestion() {
+      const q = quizQuestions[currentQ];
+      document.getElementById('quiz-progress-lbl').innerText = `Soal ${currentQ + 1} dari ${quizQuestions.length}`;
+      document.getElementById('quiz-score-lbl').innerText = `Skor: ${score}`;
+      document.getElementById('quiz-progress-bar').style.width = `${((currentQ + 1) / quizQuestions.length) * 100}%`;
+      
+      document.getElementById('quiz-question').innerText = q.q;
+      document.getElementById('quiz-explanation').classList.add('hidden');
+
+      const optsContainer = document.getElementById('quiz-options');
+      optsContainer.innerHTML = '';
+
+      q.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.className = `touch-btn w-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-semibold p-4 rounded-xl text-left text-sm border border-slate-700 transition flex items-center gap-3`;
+        btn.innerHTML = `<span class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center font-mono font-bold text-cyan-400 border border-slate-700">${String.fromCharCode(65 + idx)}</span> ${opt}`;
+        btn.onclick = () => handleAnswer(idx, btn);
+        optsContainer.appendChild(btn);
+      });
+    }
+
+    function handleAnswer(selectedIdx, btnElement) {
+      const q = quizQuestions[currentQ];
+      const allBtns = document.getElementById('quiz-options').children;
+
+      // Disable all buttons
+      for (let b of allBtns) b.onclick = null;
+
+      if (selectedIdx === q.answer) {
+        audioSynth.correct();
+        btnElement.className = 'touch-btn w-full bg-emerald-600 text-white font-bold p-4 rounded-xl text-left text-sm border border-emerald-400 flex items-center gap-3 shadow-lg';
+        score += 20;
+      } else {
+        audioSynth.wrong();
+        btnElement.className = 'touch-btn w-full bg-rose-600 text-white font-bold p-4 rounded-xl text-left text-sm border border-rose-400 flex items-center gap-3 shadow-lg';
+        // Highlight correct answer
+        allBtns[q.answer].className = 'touch-btn w-full bg-emerald-700 text-white font-bold p-4 rounded-xl text-left text-sm border border-emerald-400 flex items-center gap-3';
+      }
+
+      const expDiv = document.getElementById('quiz-explanation');
+      expDiv.innerText = `Pembahasan: ${q.exp}`;
+      expDiv.classList.remove('hidden');
+
+      setTimeout(() => {
+        currentQ++;
+        if (currentQ < quizQuestions.length) {
+          renderQuestion();
+        } else {
+          showQuizResults();
+        }
+      }, 2500);
+    }
+
+    function showQuizResults() {
+      document.getElementById('quiz-body').classList.add('hidden');
+      document.getElementById('quiz-result-screen').classList.remove('hidden');
+      document.getElementById('quiz-final-score').innerText = score;
+
+      if (score >= 80 && typeof confetti === 'function') {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      }
+    }
+
+    /* ========================================================================
+       11. THEMES & CREDITS MODAL
+       ======================================================================== */
+    const themes = ['cyber', 'light', 'lab'];
+    let currentThemeIdx = 0;
+
+    function cycleTheme() {
+      audioSynth.click();
+      currentThemeIdx = (currentThemeIdx + 1) % themes.length;
+      const theme = themes[currentThemeIdx];
+      document.body.className = `theme-${theme} h-full w-full overflow-hidden select-none relative`;
+
+      if (theme === 'light') {
+        scene.background = new THREE.Color(0xf1f5f9);
+        scene.fog = new THREE.FogExp2(0xf1f5f9, 0.015);
+      } else if (theme === 'lab') {
+        scene.background = new THREE.Color(0x0b192c);
+        scene.fog = new THREE.FogExp2(0x0b192c, 0.018);
+      } else {
+        scene.background = new THREE.Color(0x0b0f19);
+        scene.fog = new THREE.FogExp2(0x0b0f19, 0.018);
+      }
+    }
+
+    function toggleFullscreen() {
+      audioSynth.click();
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    function openCredits() {
+      audioSynth.click();
+      document.getElementById('credits-modal').classList.remove('hidden');
+    }
+
+    function closeCredits() {
+      audioSynth.click();
+      document.getElementById('credits-modal').classList.add('hidden');
+    }
+
+    /* ========================================================================
+       12. THREE.JS ANIMATION LOOP & MEMORY MANAGEMENT
+       ======================================================================== */
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // 1. Smooth Camera Lerp Animation
+      if (isCameraLerping) {
+        camera.position.lerp(targetCameraPos, 0.05);
+        controls.target.lerp(targetLookAtPos, 0.05);
+        if (camera.position.distanceTo(targetCameraPos) < 0.1) {
+          isCameraLerping = false;
+        }
+      }
+      controls.update();
+
+      // 2. Animate Data Packet Pulses Along Cables
+      packetPulses.forEach(p => {
+        const connDev = devicesData.find(d => d.id === p.conn.from);
+        if (connDev && connDev.linkDown) {
+          p.mesh.visible = false;
+        } else {
+          p.mesh.visible = true;
+          p.progress += p.speed;
+          if (p.progress > 1) p.progress = 0;
+          const pos = p.curve.getPointAt(p.progress);
+          p.mesh.position.copy(pos);
+        }
+      });
+
+      // 3. Update projected HTML hotspots positions on screen
+      updateHotspotPositions();
+
+      // 4. Render Scene
+      renderer.render(scene, camera);
+    }
+
+    // Initialize application on page load
+    window.onload = () => {
+      initThreeJS();
+    };
+  </script>
+</body>
+</html>
